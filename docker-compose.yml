@@ -1,0 +1,51 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${PORT:-3978}:3978"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ask_a_coworker
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+# Cloudflare Tunnels don't work for Teams callbacks for some reason?
+#  cloudflared:
+#    image: cloudflare/cloudflared:latest
+#    profiles:
+#      - tunnel
+#    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+#    depends_on:
+#      - app
+#    restart: unless-stopped
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles:
+      - ngrok
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    command: http --url=${NGROK_URL} app:3978 --log=stdout
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  pgdata:
